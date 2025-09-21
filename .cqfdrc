@@ -1,0 +1,8 @@
+[project]
+org='kin'
+name='yocto-tooling'
+
+[build]
+command=''
+
+# vi: ft=ini
