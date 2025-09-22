@@ -157,15 +157,39 @@ or
 TEMPLATECONF=$PWD/src/meta-vader/conf/templates/vader source ./src/poky/oe-init-build-env
 ```
 
+## bitbake-getvar
+
+Now that my build is setup I can start building, but first let's just double
+check that my template has taken affect by checking that my MACHINE and DISTRO
+are properly set.
+
+```sh
+bitbake-getvar MACHINE
+bitbake-getvar DISTRO
+# maybe you want to quickly see where you are getting your kernel sources from
+bitbake-getvar -r virtual/kernel SRC_URI
+# but lets see that unexpanded value
+bitbake-getvar -r virtual/kernel -u --value SRC_URI
+# see varflags on variables
+bitbake-getvar -f doc --value SRC_URI
+# most useful of them all
+bitbake-getvar -h
+```
+
+## bitbake-layers
+
+```sh
+bitbake-layers -h
+bitbake-layers <subcommand> -h
+```
+
 # Topics to touch on
 
 - bitbake
 - bitbake-getvar
-- makefile-getvar
 - bitbake-layers
-- bitbake-config-build
-- bitbake-diffsigs/bitbake-dumpsig
-- bblock
+<!-- - bitbake-diffsigs/bitbake-dumpsig -->
+<!-- - bblock -->
 - oe-setup-layers
 - devtool
 - recipetool
