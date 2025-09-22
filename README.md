@@ -157,60 +157,6 @@ or
 TEMPLATECONF=$PWD/src/meta-vader/conf/templates/vader source ./src/poky/oe-init-build-env
 ```
 
-## First setup build environment
-
-So first off when setting up a Yocto project you need some way to manage your
-layers, which are made up from several repos. This can be done by tools like
-git submodules, repo, or kas.
-
-### combo-layer vs oe-setup-layers
-
-The `poky` codebase itself is a multirepo project so it needs to manage its
-repos with such a tool.
-
-The tool of choice for managing multiple layers in Yocto is a hand-rolled tool
-called combo-layer.
-
-So firstly we will need to create a combo-layer configuration file.
-
-    combo-layer.conf
-
-Ironically the combo-layer tool is in the repo we want to specify in this
-sample project so we will copy a temporary version of poky to get it:
-
-```sh
-git clone git://git.yoctoproject.org/poky --depth 1 /tmp/poky
-/tmp/poky/scripts/combo-layer -c combo-layer.conf init
-/tmp/poky/scripts/combo-layer -c combo-layer.conf update poky
-rm -rf /tmp/poky
-```
-
-### build dependencies
-
-Now that we have poky we should also make sure that we have a reproducible
-build environment. Ideally dockerized so we will use `cqfd`. Note it is not a
-Yocto tool it is just the best docker wrapper in my opinion.
-
-- install-buildtools + cqfd
-
-I tried to use the install-buildtools script inside docker but it would still
-not install all the host dependencies once I finally got it working:
-
-```sh
-kin@28413da5c3a2:~/src/yocto-tooling/build$ bitbake -n core-image-minimal
-ERROR: The following required tools (as specified by HOSTTOOLS) appear to be unavailable in PATH, please install them in order to proceed:
-  bunzip2 bzip2 cpio diffstat gawk
-```
-
-Personally it just seems easier to use an ubuntu dockerfile and install all the
-dependencies listed in the Yocto docs. This install-buildtools method requires
-you to source an extra script as well which can be easily forgotten.
-
-- bitbake-layers create-layers-setup <destdir> + oe-setup-layers + setup-build
-    doesn't retain the location of the layers properly IMO
-
-- oe-init-build-env && .templateconf
-
 # Topics to touch on
 
 - bitbake
@@ -220,7 +166,6 @@ you to source an extra script as well which can be easily forgotten.
 - bitbake-config-build
 - bitbake-diffsigs/bitbake-dumpsig
 - bblock
-- combo-layer (use instead of submodules)
 - oe-setup-layers
 - devtool
 - recipetool
@@ -228,7 +173,6 @@ you to source an extra script as well which can be easily forgotten.
 - oe-depends-dot
 - oe-pkgdata-util
 - oe-run-native
-- install-buildtools + cqfd
 
 # Notes
 
