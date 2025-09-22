@@ -1,9 +1,163 @@
 # yocto-tooling
 
-To begin I want to show how to setup Yocto using stand yocto tooling (ie not
+To begin I want to show how to setup Yocto using standard yocto tooling (ie not
 using kas or repo).
 
-# First setup build environment
+<!-- |                              | combo-layer | oe-setup-layers | templates | git submodules | repo | kas | kas-container | -->
+<!-- |------------------------------|-------------|-----------------|-----------|----------------|------|-----|---------------| -->
+<!-- | multi repo management        |      x      |        x        |           |       x        |  x   |  x  |      x        | -->
+<!-- | build environment management |             |        x        |     x     |                |      |  x  |      x        | -->
+<!-- | layer management             |             |        x        |     x     |                |      |  x  |      x        | -->
+<!-- | container management         |             |                 |           |                |      |     |      x        | -->
+<!-- | patch management             |      x      |                 |           |                |      |  x  |      x        | -->
+
+Yocto project layout I chose when using official Yocto tools:
+```sh
+yocto-project (not source controlled)
+├── build     (not source controlled)
+└── src
+    ├── meta-openembedded (separate git repo) (third party layer)
+    ├── poky              (separate git repo) (third party layer)
+    └── meta-vader        (separate git repo) (our bootstrap layer)
+```
+
+What I personally prefer for a Yocto project layout:
+```sh
+yocto-project (git repo)
+├── build     (not source controlled)
+└── src
+    ├── meta-openembedded (separate git repo) (third party layer)
+    ├── poky              (separate git repo) (third party layer)
+    └── meta-vader (source controlled as part of yocto-project repo)
+```
+
+I wasn't able to get my preferred layout with the official tools because it
+would treat the top level git repo as a layer so I couldn't figure out how to
+use `setup-layers` without it creating `yocto-project/yocto-project`.
+
+## Setting up a Yocto project from scratch with official Yocto tools
+
+```sh
+cd
+rm -rf ~/yocto-project*
+mkdir ~/yocto-project
+cd ~/yocto-project
+```
+
+First things first we need `poky`:
+
+```sh
+git clone git://git.yoctoproject.org/poky -b scarthgap --depth 1 src/poky
+```
+
+Gunna cheat a lil with `cqfd` since I am on Arch:
+
+```sh
+cp -r ~/src/yocto-tooling/.cqfd* .
+cqfd init
+cqfd shell
+```
+
+```sh
+source src/poky/oe-init-build-env
+```
+
+Let's see what layers we have right now:
+
+```sh
+bitbake-layers show-layers
+```
+
+We can add a layer from the oe-layer index:
+
+```sh
+bitbake-layers layerindex-fetch --shallow --fetchdir ../src meta-python
+bitbake-layers show-layers
+```
+
+Now lets add a custom layer but we need to track it with git so that
+setup-layers treats it as a layer:
+
+```sh
+bitbake-layers create-layer ../src/meta-vader
+git -C ../src/meta-vader init
+git -C ../src/meta-vader add .
+git -C ../src/meta-vader commit -m "initial commit"
+git -C ../src/meta-vader remote add origin ~/yocto-project/src/meta-vader
+```
+
+Now we need to add our custom layer to our bblayers.conf, we can do this
+manually or with `bitbake-layers`.
+
+```sh
+bitbake-layers show-layers
+bitbake-layers add-layer ../src/meta-vader
+bitbake-layers show-layers
+```
+
+Let's set the machine and distro in local.conf:
+
+```sh
+cat << EOF > conf/local.conf
+MACHINE = "qemux86-64"
+DISTRO = "poky-tiny"
+EOF
+```
+
+Now I want to save this setup so that it is reproducible.
+
+I can save my layers and their remote's with the following command:
+
+```sh
+# save layer remotes
+bitbake-layers create-layers-setup ../src/meta-vader
+# save bblayers.conf and local.conf as a template
+bitbake-layers save-build-conf ../src/meta-vader vader
+# save template and conf files in layer
+git -C ../src/meta-vader add .
+git -C ../src/meta-vader commit -m "save setup-layers and template"
+```
+
+Now I want to reproduce this setup on another machine:
+
+```sh
+# exit docker <C-d>
+cd
+mkdir ~/yocto-project2
+cd ~/yocto-project2
+git clone ~/yocto-project/src/meta-vader/ ./src/meta-vader
+```
+
+Now that I have cloned my bootstrap layer to the location I want I can setup
+all the other layers:
+
+```sh
+./src/meta-vader/setup-layers
+```
+
+This clones all the layers to the same directory as `meta-vader`:
+
+Copy over docker config files again:
+
+```sh
+cp -r ~/src/yocto-tooling/.cqfd* .
+cqfd init
+cqfd shell
+```
+
+Now `setup-build` or the classic `oe-init-build-env`
+
+```sh
+./src/setup-build setup -c vader-vader -b build
+```
+
+or
+
+```sh
+TEMPLATECONF=$PWD/src/meta-vader/conf/templates/vader source ./src/poky/oe-init-build-env
+```
+
+## First setup build environment
 
 So first off when setting up a Yocto project you need some way to manage your
 layers, which are made up from several repos. This can be done by tools like
