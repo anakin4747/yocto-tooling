@@ -1,15 +1,22 @@
 # yocto-tooling
 
+## Tools I will cover
+
+- [x] bitbake-layers
+- [x] setup-layers
+- [x] setup-build
+- [x] bitbake-getvar
+- [x] bitbake
+- [x] recipetool
+- [ ] devtool
+- [ ] runqemu
+- [ ] oe-depends-dot
+- [ ] oe-pkgdata-util
+- [ ] oe-run-native
+- [ ] buildhistory-collect-srcrevs
+
 To begin I want to show how to setup Yocto using standard yocto tooling (ie not
 using kas or repo).
-
-<!-- |                              | combo-layer | oe-setup-layers | templates | git submodules | repo | kas | kas-container | -->
-<!-- |------------------------------|-------------|-----------------|-----------|----------------|------|-----|---------------| -->
-<!-- | multi repo management        |      x      |        x        |           |       x        |  x   |  x  |      x        | -->
-<!-- | build environment management |             |        x        |     x     |                |      |  x  |      x        | -->
-<!-- | layer management             |             |        x        |     x     |                |      |  x  |      x        | -->
-<!-- | container management         |             |                 |           |                |      |     |      x        | -->
-<!-- | patch management             |      x      |                 |           |                |      |  x  |      x        | -->
 
 Yocto project layout I chose when using official Yocto tools:
 ```sh
@@ -38,7 +45,6 @@ use `setup-layers` without it creating `yocto-project/yocto-project`.
 ## Setting up a Yocto project from scratch with official Yocto tools
 
 ```sh
-cd
 rm -rf ~/yocto-project*
 mkdir ~/yocto-project
 cd ~/yocto-project
@@ -71,8 +77,10 @@ bitbake-layers show-layers
 We can add a layer from the oe-layer index:
 
 ```sh
+bitbake-layers layerindex-show-depends meta-python
 bitbake-layers layerindex-fetch --shallow --fetchdir ../src meta-python
 bitbake-layers show-layers
+bitbake-layers show-recipes -l meta-python
 ```
 
 Now lets add a custom layer but we need to track it with git so that
@@ -95,6 +103,13 @@ bitbake-layers add-layer ../src/meta-vader
 bitbake-layers show-layers
 ```
 
+Just to show some more bitbake-layers commands I will delete some layers:
+
+```sh
+bitbake-layers remove-layer meta-python meta-oe
+bitbake-layers show-layers
+```
+
 Let's set the machine and distro in local.conf:
 
 ```sh
@@ -113,6 +128,9 @@ I can save my layers and their remote's with the following command:
 bitbake-layers create-layers-setup ../src/meta-vader
 # save bblayers.conf and local.conf as a template
 bitbake-layers save-build-conf ../src/meta-vader vader
+```
+
+```sh
 # save template and conf files in layer
 git -C ../src/meta-vader add .
 git -C ../src/meta-vader commit -m "save setup-layers and template"
@@ -122,16 +140,17 @@ Now I want to reproduce this setup on another machine:
 
 ```sh
 # exit docker <C-d>
-cd
-mkdir ~/yocto-project2
-cd ~/yocto-project2
-git clone ~/yocto-project/src/meta-vader/ ./src/meta-vader
+
+# 1. clone bootstrap Yocto layer
+git clone ~/yocto-project/src/meta-vader/ ~/yocto-project2/src/meta-vader
+cd ~/yocto-project2/
 ```
 
 Now that I have cloned my bootstrap layer to the location I want I can setup
 all the other layers:
 
 ```sh
+# 2. run setup-layers to clone other layers
 ./src/meta-vader/setup-layers
 ```
 
@@ -148,14 +167,80 @@ cqfd shell
 Now `setup-build` or the classic `oe-init-build-env`
 
 ```sh
+# 3. setup build env and conf files
 ./src/setup-build setup -c vader-vader -b build
 ```
 
 or
 
 ```sh
+# 3. setup build env and conf files
 TEMPLATECONF=$PWD/src/meta-vader/conf/templates/vader source ./src/poky/oe-init-build-env
 ```
+
+```sh
+# 4. build
+bitbake -k core-image-minimal
+```
+
+Personally not a big fan because it requires more steps which are prone to
+human error.
+
+Where as with kas the process would look like:
+
+```sh
+# 1. clone project
+git clone <url> yocto-project
+cd yocto-project
+# 2. build
+kas build
+```
+
+Plus you don't have to manually clone the bootstrap layer into src. So with kas
+the locations of the layers in relation to the root of the project are preserved
+which is not the case with the official Yocto method. Which isn't an issue if
+all your layers are at the root of the project but I prefer them in a src
+folder so that it is easier to grep/find.
+
+```sh
+# grepping layers if they are in the root
+grep -rn placeholder poky meta-openembedded meta-vader
+# grepping layers if they are in src
+grep -rn placeholder src
+```
+
+## bitbake-layers
+
+Now so far I have shown you every bitbake-layers command except:
+
+```sh
+bitbake-layers show-recipes
+bitbake-layers show-recipes -l meta-python
+bitbake-layers show-recipes -i kernel
+```
+
+```sh
+bitbake-layers flatten layer1 layer2 output-layer
+# flatten layer configuration into a separate output directory.
+```
+Can be used to merge layers.
+
+```sh
+bitbake-layers show-overlayed
+```
+Shows when multiple layers provide the same recipe.
+
+```sh
+bitbake-layers show-appends
+bitbake-layers show-appends linux-yocto
+```
+
+```sh
+bitbake-layers show-cross-depends
+```
+Show dependencies between recipes that cross layer boundaries. Great for
+determining what layers your layer depends on to correctly set
+`LAYERDEPENDS_meta-<layer>` in layer.conf.
 
 ## bitbake-getvar
 
@@ -176,283 +261,175 @@ bitbake-getvar -f doc --value SRC_URI
 bitbake-getvar -h
 ```
 
-## bitbake-layers
+Great for investigating if setting a variable was redundant.
+
+## bitbake
+
+Most used bitbake commands:
 
 ```sh
-bitbake-layers -h
-bitbake-layers <subcommand> -h
+bitbake core-image-minimal
+bitbake -k core-image-minimal
+bitbake -n core-image-minimal
+bitbake -p core-image-minimal
 ```
 
-# Topics to touch on
-
-- bitbake
-- bitbake-getvar
-- bitbake-layers
-<!-- - bitbake-diffsigs/bitbake-dumpsig -->
-<!-- - bblock -->
-- oe-setup-layers
-- devtool
-- recipetool
-- runqemu
-- oe-depends-dot
-- oe-pkgdata-util
-- oe-run-native
-
-# Notes
-
-- autobuilder-worker-prereq-tests
-    For CI to check for build prerequisits
-
-- b4-wrapper-poky.py
-    script to be called from b4
-
-- bblock
-    lock recipes so that they are not rebuilt
-    bblock.rst
-
-- bitbake
-    -g
-    -e
-    -u
-    -f
-    -c
-    --runall
-    --runonly
-    -n
-    -k
-    -p
-    -P
-    -D
-    -w
-
-    Cool, look into server options
-
-- bitbake-config-build
-    used to specify build configuration fragments
-    for like setting up CI or other fragments of options
-
-    ```sh
-    find -path \*conf/fragments/\*/\*.conf
-    ```
-
-- bitbake-diffsigs/bitbake-dumpsig
-- bitbake-hashclient
-- bitbake-hashserv
-- bitbake-prserv
-- bitbake-prserv-tool
-- clean-hashserver-database
-
-- bitbake-getvar
-    better alternative to `bitbake -e | grep` since it shows the history
-
-- bitbake-layers
-    PRIORITY tool
-
-- bitbake-selftest
-    running bitbake tests
-
-- bitbake-server
-    should not be ran by users
-
-- bitbake-worker
-    should not be ran by users
-
-- buildall-qemu
-    tool for automating build testing of recipes
-
-- buildhistory-collect-srcrevs
-    -a can be used to lock SRCREVs used to override AUTOREV default settings
-    watch out overrides can still take precedence if not used with -f
-
-- buildhistory-diff
-    Report significant differences in the buildhistory repository since a specific revision
-
-- buildstats-diff
-    Script for comparing buildstats from two different builds
-
-- buildstats-summary
-    Dump a summary of the specified buildstats to the terminal, filtering and
-    sorting by walltime.
-
-- combo-layer
-    Yocto specific version of repo or submodules
-    - combo-layer.conf.example
-    - combo-layer-hook-default.sh
-
-- cp-noerror
-    cp with no error if files disappear
-
-- create-pull-request
-    used for contributing, preparing patches and cover letters
-
-- crosstap
-    sets up stuff for systemtap scripts
-    linux diagnostics tooling
-
-- cve-json-to-text.py
-    exactly what it sounds like
-
-- devtool
-    PRIORITY tool
-
-- gen-lockedsig-cache
-    idk
-
-- git-make-shallow
-    idk
-
-- install-buildtools
-    script for installing build tools dependencies
-    could be cool to use in Dockerfiles instead of all of them explicitly
-
-- lz4c
-    not too useful for you currently
-
-- makefile-getvar
-    cool may be good to mention
-
-- oe-buildenv-internal
-    used internally by oe-init-build-env
-
-- oe-build-perf-test
-- oe-build-perf-report
-    generate build performance reports
-
-- oe-check-sstate
-- oe-debuginfod
-
-- oe-depends-dot
-    so useful for determining why recipes get included
-
-- oe-find-native-sysroot
-    This script is intended to be run within other scripts by source'ing
-
-- oe-git-archive
-- oe-git-proxy
-    idk im not going to dive into these
-
-- oe-gnome-terminal-phonehome
-    idk
-
-- oe-pkgdata-browser
-- oe-pkgdata-browser.glade
-    gui for browsing pkgdata
-
-- oe-pkgdata-util
-    PRIORITY tool
-    super useful
-
-- oe-publish-sdk
-    idk
-
-- oepydevshell-internal.py
-    getting a pydevshell
-
-- oe-pylint
-    pylint wrapper
-
-- oe-run-native
-    PRIORITY tool
-    run native tools
-
-- oe-selftest
-    runs testsuites for oe stuff
-
-- oe-setup-layers
-    - calls oe-setup-build
-        sets up local.conf and bblayers.conf
-
-- oe-init-build-env
-    - sets up OEROOT
-    - oe-buildenv-internal
-        - sets up build environment
-    - oe-setup-builddir
-        sources `$OEROOT/.templateconf`
-        you can use .templateconf to select templates for local.conf and
-        bblayers.conf
-
-        populates the local.conf and bblayers.conf from the default templates
-
-        ```sh
-        . "$OEROOT/.templateconf"
-        ...
-        OECORELAYERCONF="$TEMPLATECONF/bblayers.conf.sample"
-        OECORELOCALCONF="$TEMPLATECONF/local.conf.sample"
-        OECORESUMMARYCONF="$TEMPLATECONF/conf-summary.txt"
-        OECORENOTESCONF="$TEMPLATECONF/conf-notes.txt"
-        ```
-        ```sh
-        # from .templateconf
-        TEMPLATECONF=${TEMPLATECONF:-meta-poky/conf/templates/default}
-        ```
-
-    - oe-setup-vscode
-        - sets up vscode config files
-
-- oe-test
-    for testing openembedded
-
-- oe-time-dd-test.sh
-    test what part of the build system stresses the filesystem
-
-- oe-trim-schemas
-    gnome configuration simplification script
-
-- opkg-query-helper.py
-    idk
-
-- patchtest
-- patchtest-get-branch
-- patchtest-get-series
-- patchtest.README
-- patchtest-send-results
-- patchtest-setup-sharedir
-    for testing patches for contributions
-
-- pull-sdpx-licenses.py
-    idk
-
-- pythondeps
-    used by recipetool
-
-- recipetool
-    used for creating recipes n stuff
-    TODO: deep dive
-
-- relocate_sdk.py
-    relocates sdk
-    used by the sdk installer script
-
-- resulttool
-    test results tool - tool for manipulating OEQA test result json files
-
-- rootfs_rpm-extract-postinst.awk
-    10 line awk script for filtering specific lines in postinsts scripts
-
-- rpm2cpio.sh
-
-- runqemu
-- runqemu-addptable2image
-- runqemu-export-rootfs
-- runqemu-extract-sdk
-- runqemu-gen-tapdevs
-- runqemu-ifdown
-- runqemu-ifup
-- runqemu.README
-
-- send-error-report
-- send-pull-request
-- sstate-cache-management.py
-- sstate-diff-machines.sh
-- sstate-sysroot-cruft.sh
-- sysroot-relativelinks.py
-- task-time
-- test-reexec
-- test-remote-image
-- toaster
-- toaster-eventreplay
-- verify-bashisms
-- wic
-- yocto-check-layer
-- yocto-check-layer-wrapper
-- yocto_testresults_query.py
+```sh
+bitbake -c listtasks busybox
+bitbake -c compile busybox
+bitbake -c devshell busybox
+bitbake -c pydevshell busybox
+bitbake -c clean busybox
+bitbake -c cleansstate busybox
+bitbake -c cleanall busybox
+```
+
+```sh
+bitbake -e core-image-minimal | tee image.env
+```
+
+```sh
+bitbake --runall fetch world
+```
+
+```sh
+bitbake -g core-image-minimal
+```
+
+## recipetool
+
+```sh
+recipetool edit example
+```
+
+```sh
+# kind of annoying that the path must be specified even though it doesn't need
+# to be for the edit subcommand
+recipetool setvar \
+    ../src/meta-vader/recipes-example/example/example_0.1.bb \
+    SUMMARY "A super cool example recipe"
+
+# whats cool about this is you can create patches to apply to the layer to
+# setvar, unfortunately this situation isn't common enough for a command like
+# this to become second hand knowledge. Pretty small use-case.
+recipetool setvar \
+    --patch \
+    ../src/meta-vader/recipes-example/example/example_0.1.bb \
+    SUMMARY "A super cool example recipe"
+```
+
+```sh
+mkdir /tmp/example-source-code
+cat << EOF > /tmp/example-source-code/complex.sh
+#!/bin/sh
+echo "super complex shell script"
+EOF
+recipetool create /tmp/example-source-code/complex.sh \
+    -o ../src/meta-vader/recipes-example/complex-script.bb
+```
+
+```sh
+recipetool newappend -w ../src/meta-vader virtual/kernel
+```
+
+```sh
+# requires build first
+cat << EOF > hosts
+127.0.0.1        localhost
+EOF
+recipetool appendfile ../src/meta-vader /etc/hosts hosts
+```
+
+```sh
+zcat /proc/config.gz > this_defconfig
+recipetool appendsrcfile ../src/meta-vader virtual/kernel this_defconfig arch/x86/configs/this_defconfig
+# although your kernel provider may have their own way to implement this
+```
+
+# devtool
+
+```sh
+# creates this recipe in the workspace for you to edit
+devtool add complex-script /tmp/example-source-code/complex.sh
+devtool finish complex-script meta-vader
+```
+
+```sh
+# when I want to patch the kernel
+devtool modify virtual/kernel
+```
+
+```sh
+devtool status
+```
+
+```sh
+devtool reset -a
+```
+
+```sh
+devtool finish --force-patch-refresh virtual/kernel
+```
+
+```sh
+devtool latest-version virtual/kernel
+devtool check-upgrade-status virtual/kernel
+
+devtool check-upgrade-status busybox
+devtool upgrade busybox
+```
+
+```sh
+devtool search ostree
+# limited without building ahead of time
+# searches locally not online lame
+```
+
+<!-- ```sh -->
+<!-- kin@f16059a05e95:~/yocto-project/build$ devtool -h -->
+<!-- NOTE: Starting bitbake server... -->
+<!-- usage: devtool [--basepath BASEPATH] [--bbpath BBPATH] [-d] [-q] [--color COLOR] [-h] <subcommand> ... -->
+<!---->
+<!-- OpenEmbedded development tool -->
+<!---->
+<!-- options: -->
+<!--   --basepath BASEPATH   Base directory of SDK / build directory -->
+<!--   --bbpath BBPATH       Explicitly specify the BBPATH, rather than getting it from the metadata -->
+<!--   -d, --debug           Enable debug output -->
+<!--   -q, --quiet           Print only errors -->
+<!--   --color COLOR         Colorize output (where COLOR is auto, always, never) -->
+<!--   -h, --help            show this help message and exit -->
+<!---->
+<!-- subcommands: -->
+<!--   Beginning work on a recipe: -->
+<!--     add                   Add a new recipe -->
+<!--     modify                Modify the source for an existing recipe -->
+<!--     upgrade               Upgrade an existing recipe -->
+<!--   Getting information: -->
+<!--     status                Show workspace status -->
+<!--     latest-version        Report the latest version of an existing recipe -->
+<!--     check-upgrade-status  Report upgradability for multiple (or all) recipes -->
+<!--     search                Search available recipes -->
+<!--   Working on a recipe in the workspace: -->
+<!--     ide-sdk               Setup the SDK and configure the IDE -->
+<!--     build                 Build a recipe -->
+<!--     rename                Rename a recipe file in the workspace -->
+<!--     edit-recipe           Edit a recipe file -->
+<!--     find-recipe           Find a recipe file -->
+<!--     configure-help        Get help on configure script options -->
+<!--     update-recipe         Apply changes from external source tree to recipe -->
+<!--     reset                 Remove a recipe from your workspace -->
+<!--     finish                Finish working on a recipe in your workspace -->
+<!--   Testing changes on target: -->
+<!--     deploy-target         Deploy recipe output files to live target machine -->
+<!--     undeploy-target       Undeploy recipe output files in live target machine -->
+<!--     build-image           Build image including workspace recipe packages -->
+<!--   Advanced: -->
+<!--     create-workspace      Set up workspace in an alternative location -->
+<!--     import                Import exported tar archive into workspace -->
+<!--     extract               Extract the source for an existing recipe -->
+<!--     sync                  Synchronize the source tree for an existing recipe -->
+<!--     export                Export workspace into a tar archive -->
+<!--     menuconfig            Alter build-time configuration for a recipe -->
+<!-- Use devtool <subcommand> --help to get help on a specific command -->
+<!-- ``` -->
