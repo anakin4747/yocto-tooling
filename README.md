@@ -83,6 +83,13 @@ bitbake-layers show-layers
 bitbake-layers show-recipes -l meta-python
 ```
 
+Just to show some more bitbake-layers commands I will delete some layers:
+
+```sh
+bitbake-layers remove-layer meta-python meta-oe
+bitbake-layers show-layers
+```
+
 Now lets add a custom layer but we need to track it with git so that
 setup-layers treats it as a layer:
 
@@ -91,7 +98,6 @@ bitbake-layers create-layer ../src/meta-vader
 git -C ../src/meta-vader init
 git -C ../src/meta-vader add .
 git -C ../src/meta-vader commit -m "initial commit"
-git -C ../src/meta-vader remote add origin ~/yocto-project/src/meta-vader
 ```
 
 Now we need to add our custom layer to our bblayers.conf, we can do this
@@ -100,13 +106,6 @@ manually or with `bitbake-layers`.
 ```sh
 bitbake-layers show-layers
 bitbake-layers add-layer ../src/meta-vader
-bitbake-layers show-layers
-```
-
-Just to show some more bitbake-layers commands I will delete some layers:
-
-```sh
-bitbake-layers remove-layer meta-python meta-oe
 bitbake-layers show-layers
 ```
 
@@ -146,6 +145,14 @@ git clone ~/yocto-project/src/meta-vader/ ~/yocto-project2/src/meta-vader
 cd ~/yocto-project2/
 ```
 
+Copy over docker config files again:
+
+```sh
+cp -r ~/src/yocto-tooling/.cqfd* .
+cqfd init
+cqfd shell
+```
+
 Now that I have cloned my bootstrap layer to the location I want I can setup
 all the other layers:
 
@@ -155,14 +162,6 @@ all the other layers:
 ```
 
 This clones all the layers to the same directory as `meta-vader`:
-
-Copy over docker config files again:
-
-```sh
-cp -r ~/src/yocto-tooling/.cqfd* .
-cqfd init
-cqfd shell
-```
 
 Now `setup-build` or the classic `oe-init-build-env`
 
@@ -262,6 +261,8 @@ bitbake-getvar -h
 ```
 
 Great for investigating if setting a variable was redundant.
+
+~/src/yocto-tooling/patches/0001-kernel.bbclass-generate-compile_commands.json.patch
 
 ## bitbake
 
