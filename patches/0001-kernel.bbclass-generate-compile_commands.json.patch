@@ -1,0 +1,44 @@
+From e7c34f4de55b8a83249ebbe56bdf7a8a86429719 Mon Sep 17 00:00:00 2001
+From: Anakin Childerhose <anakin@childerhose.ca>
+Date: Sat, 2 Aug 2025 01:34:14 -0400
+Subject: [PATCH 1/4] kernel.bbclass: generate compile_commands.json
+
+Add do_generate_compile_commands() task after compiling to have the
+clangd language server be configured correctly for the kernel by
+default.
+
+Signed-off-by: Anakin Childerhose <anakin@childerhose.ca>
+---
+ meta/classes-recipe/kernel.bbclass | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/meta/classes-recipe/kernel.bbclass b/meta/classes-recipe/kernel.bbclass
+index eb03424dfc..3aec26e845 100644
+--- a/meta/classes-recipe/kernel.bbclass
++++ b/meta/classes-recipe/kernel.bbclass
+@@ -464,6 +464,22 @@ do_compile_kernelmodules() {
+ }
+ addtask compile_kernelmodules after do_compile before do_strip
+
++do_generate_compile_commands[doc] = "Generate compile_commands.json for the clangd language server"
++do_generate_compile_commands() {
++	if ! [ -f "${S}/scripts/clang-tools/gen_compile_commands.py" ]; then
++		bbwarn "no gen_compile_commands.py script, cannot generate compile_commands.json"
++		return
++	fi
++
++	${S}/scripts/clang-tools/gen_compile_commands.py \
++		--directory "${B}" \
++		--ar "${AR}" \
++		--output "${S}/compile_commands.json" || {
++			bbwarn "failed to generate compile_commands.json"
++	}
++}
++addtask generate_compile_commands after do_compile_kernelmodules
++
+ kernel_do_install() {
+ 	#
+ 	# First install the modules
+--
+2.51.0
+
