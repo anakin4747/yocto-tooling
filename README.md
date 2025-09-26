@@ -2,18 +2,18 @@
 
 ## Tools I will cover
 
-- [x] bitbake-layers
-- [x] setup-layers
-- [x] setup-build
-- [x] bitbake-getvar
-- [x] bitbake
-- [x] recipetool
-- [ ] devtool
-- [ ] runqemu
-- [ ] oe-depends-dot
-- [ ] oe-pkgdata-util
-- [ ] oe-run-native
-- [ ] buildhistory-collect-srcrevs
+- bitbake-layers
+- setup-layers
+- setup-build
+- bitbake-getvar
+- bitbake
+- recipetool
+- devtool
+- runqemu
+- oe-depends-dot
+- oe-pkgdata-util
+- oe-run-native
+- buildhistory-collect-srcrevs
 
 To begin I want to show how to setup Yocto using standard yocto tooling (ie not
 using kas or repo).
@@ -23,9 +23,10 @@ Yocto project layout I chose when using official Yocto tools:
 yocto-project (not source controlled)
 ├── build     (not source controlled)
 └── src
-    ├── meta-openembedded (separate git repo) (third party layer)
-    ├── poky              (separate git repo) (third party layer)
-    └── meta-vader        (separate git repo) (our bootstrap layer)
+    ├── meta-vader        (separate git repo)  (our bootstrap layer)
+    ├── poky              (separate git repo)  (third party layer)
+    ├── meta-openembedded (separate git repo)  (third party layer)
+    └── ...               (separate git repos) (third party layers)
 ```
 
 What I personally prefer for a Yocto project layout:
@@ -33,9 +34,10 @@ What I personally prefer for a Yocto project layout:
 yocto-project (git repo)
 ├── build     (not source controlled)
 └── src
-    ├── meta-openembedded (separate git repo) (third party layer)
-    ├── poky              (separate git repo) (third party layer)
-    └── meta-vader (source controlled as part of yocto-project repo)
+    ├── meta-vader (source controlled as part of yocto-project repo)
+    ├── poky              (separate git repo)  (third party layer)
+    ├── meta-openembedded (separate git repo)  (third party layer)
+    └── ...               (separate git repos) (third party layers)
 ```
 
 I wasn't able to get my preferred layout with the official tools because it
@@ -43,10 +45,9 @@ would treat the top level git repo as a layer so I couldn't figure out how to
 use `setup-layers` without it creating `yocto-project/yocto-project`.
 
 ## Setting up a Yocto project from scratch with official Yocto tools
+<!-- ~/src/yocto-tooling/videos/setting-up-a-yocto-project.mkv -->
 
 ```sh
-rm -rf ~/yocto-project*
-mkdir ~/yocto-project
 cd ~/yocto-project
 ```
 
@@ -78,8 +79,14 @@ We can add a layer from the oe-layer index:
 
 ```sh
 bitbake-layers layerindex-show-depends meta-python
+```
+
+```sh
 bitbake-layers layerindex-fetch --shallow --fetchdir ../src meta-python
 bitbake-layers show-layers
+```
+
+```sh
 bitbake-layers show-recipes -l meta-python
 ```
 
@@ -88,6 +95,7 @@ Just to show some more bitbake-layers commands I will delete some layers:
 ```sh
 bitbake-layers remove-layer meta-python meta-oe
 bitbake-layers show-layers
+rm -rf ../src/meta-openembedded
 ```
 
 Now lets add a custom layer but we need to track it with git so that
@@ -113,8 +121,11 @@ Let's set the machine and distro in local.conf:
 
 ```sh
 cat << EOF > conf/local.conf
+INHERIT += "buildhistory"
 MACHINE = "qemux86-64"
-DISTRO = "poky-tiny"
+DISTRO = "poky-altcfg"
+DISTRO_FEATURES = "systemd pci ext4 ipv4"
+EXTRA_IMAGE_FEATURES += "empty-root-password"
 EOF
 ```
 
@@ -135,11 +146,12 @@ git -C ../src/meta-vader add .
 git -C ../src/meta-vader commit -m "save setup-layers and template"
 ```
 
+## Using the bootstrap layer
+<!-- ~/src/yocto-tooling/videos/using-the-bootstrap-layer.mkv -->
+
 Now I want to reproduce this setup on another machine:
 
 ```sh
-# exit docker <C-d>
-
 # 1. clone bootstrap Yocto layer
 git clone ~/yocto-project/src/meta-vader/ ~/yocto-project2/src/meta-vader
 cd ~/yocto-project2/
@@ -195,26 +207,12 @@ cd yocto-project
 kas build
 ```
 
-Plus you don't have to manually clone the bootstrap layer into src. So with kas
-the locations of the layers in relation to the root of the project are preserved
-which is not the case with the official Yocto method. Which isn't an issue if
-all your layers are at the root of the project but I prefer them in a src
-folder so that it is easier to grep/find.
-
-```sh
-# grepping layers if they are in the root
-grep -rn placeholder poky meta-openembedded meta-vader
-# grepping layers if they are in src
-grep -rn placeholder src
-```
-
 ## bitbake-layers
+<!-- ~/src/yocto-tooling/videos/bitbake-layers.mkv -->
 
 Now so far I have shown you every bitbake-layers command except:
 
 ```sh
-bitbake-layers show-recipes
-bitbake-layers show-recipes -l meta-python
 bitbake-layers show-recipes -i kernel
 ```
 
@@ -222,11 +220,13 @@ bitbake-layers show-recipes -i kernel
 bitbake-layers flatten layer1 layer2 output-layer
 # flatten layer configuration into a separate output directory.
 ```
+
 Can be used to merge layers.
 
 ```sh
 bitbake-layers show-overlayed
 ```
+
 Shows when multiple layers provide the same recipe.
 
 ```sh
@@ -242,6 +242,7 @@ determining what layers your layer depends on to correctly set
 `LAYERDEPENDS_meta-<layer>` in layer.conf.
 
 ## bitbake-getvar
+<!-- ~/src/yocto-tooling/videos/bitbake-getvar.mkv -->
 
 Now that my build is setup I can start building, but first let's just double
 check that my template has taken affect by checking that my MACHINE and DISTRO
@@ -262,9 +263,8 @@ bitbake-getvar -h
 
 Great for investigating if setting a variable was redundant.
 
-~/src/yocto-tooling/patches/0001-kernel.bbclass-generate-compile_commands.json.patch
-
 ## bitbake
+<!-- ~/src/yocto-tooling/videos/bitbake.mkv -->
 
 Most used bitbake commands:
 
@@ -272,7 +272,6 @@ Most used bitbake commands:
 bitbake core-image-minimal
 bitbake -k core-image-minimal
 bitbake -n core-image-minimal
-bitbake -p core-image-minimal
 ```
 
 ```sh
@@ -291,6 +290,7 @@ bitbake -e core-image-minimal | tee image.env
 
 ```sh
 bitbake --runall fetch world
+bitbake --runall fetch core-image-minimal
 ```
 
 ```sh
@@ -298,6 +298,7 @@ bitbake -g core-image-minimal
 ```
 
 ## recipetool
+<!-- ~/src/yocto-tooling/videos/recipetool.mkv -->
 
 ```sh
 recipetool edit example
@@ -343,21 +344,34 @@ recipetool appendfile ../src/meta-vader /etc/hosts hosts
 
 ```sh
 zcat /proc/config.gz > this_defconfig
-recipetool appendsrcfile ../src/meta-vader virtual/kernel this_defconfig arch/x86/configs/this_defconfig
+recipetool appendsrcfile ../src/meta-vader virtual/kernel this_defconfig \
+    arch/x86/configs/this_defconfig
 # although your kernel provider may have their own way to implement this
 ```
 
-# devtool
+## devtool
+<!-- ~/src/yocto-tooling/videos/devtool.mkv -->
 
 ```sh
+cat /tmp/example-source-code/complex.sh
 # creates this recipe in the workspace for you to edit
 devtool add complex-script /tmp/example-source-code/complex.sh
-devtool finish complex-script meta-vader
+devtool rename complex-script simple-script
+devtool finish simple-script meta-vader
 ```
 
 ```sh
 # when I want to patch the kernel
 devtool modify virtual/kernel
+devtool menuconfig linux-yocto
+
+CONFIG_GDB_SCRIPTS=y
+CONFIG_WATCHDOG=n
+
+# highlight the difference between devshell and devtool
+bitbake -c devshell virtual/kernel
+make scripts_gdb
+devtool finish linux-yocto ../src/meta-vader/
 ```
 
 ```sh
@@ -386,51 +400,75 @@ devtool search ostree
 # searches locally not online lame
 ```
 
-<!-- ```sh -->
-<!-- kin@f16059a05e95:~/yocto-project/build$ devtool -h -->
-<!-- NOTE: Starting bitbake server... -->
-<!-- usage: devtool [--basepath BASEPATH] [--bbpath BBPATH] [-d] [-q] [--color COLOR] [-h] <subcommand> ... -->
-<!---->
-<!-- OpenEmbedded development tool -->
-<!---->
-<!-- options: -->
-<!--   --basepath BASEPATH   Base directory of SDK / build directory -->
-<!--   --bbpath BBPATH       Explicitly specify the BBPATH, rather than getting it from the metadata -->
-<!--   -d, --debug           Enable debug output -->
-<!--   -q, --quiet           Print only errors -->
-<!--   --color COLOR         Colorize output (where COLOR is auto, always, never) -->
-<!--   -h, --help            show this help message and exit -->
-<!---->
-<!-- subcommands: -->
-<!--   Beginning work on a recipe: -->
-<!--     add                   Add a new recipe -->
-<!--     modify                Modify the source for an existing recipe -->
-<!--     upgrade               Upgrade an existing recipe -->
-<!--   Getting information: -->
-<!--     status                Show workspace status -->
-<!--     latest-version        Report the latest version of an existing recipe -->
-<!--     check-upgrade-status  Report upgradability for multiple (or all) recipes -->
-<!--     search                Search available recipes -->
-<!--   Working on a recipe in the workspace: -->
-<!--     ide-sdk               Setup the SDK and configure the IDE -->
-<!--     build                 Build a recipe -->
-<!--     rename                Rename a recipe file in the workspace -->
-<!--     edit-recipe           Edit a recipe file -->
-<!--     find-recipe           Find a recipe file -->
-<!--     configure-help        Get help on configure script options -->
-<!--     update-recipe         Apply changes from external source tree to recipe -->
-<!--     reset                 Remove a recipe from your workspace -->
-<!--     finish                Finish working on a recipe in your workspace -->
-<!--   Testing changes on target: -->
-<!--     deploy-target         Deploy recipe output files to live target machine -->
-<!--     undeploy-target       Undeploy recipe output files in live target machine -->
-<!--     build-image           Build image including workspace recipe packages -->
-<!--   Advanced: -->
-<!--     create-workspace      Set up workspace in an alternative location -->
-<!--     import                Import exported tar archive into workspace -->
-<!--     extract               Extract the source for an existing recipe -->
-<!--     sync                  Synchronize the source tree for an existing recipe -->
-<!--     export                Export workspace into a tar archive -->
-<!--     menuconfig            Alter build-time configuration for a recipe -->
-<!-- Use devtool <subcommand> --help to get help on a specific command -->
-<!-- ``` -->
+## runqemu
+<!-- ~/src/yocto-tooling/videos/runqemu.mkv -->
+
+```sh
+runqemu slirp qemux86-64 nographic
+```
+
+```sh
+runqemu slirp qemux86-64 nographic \
+    qemuparams="-s -S" \
+    bootparams="nokaslr"
+```
+
+```vim
+Termdebug /home/kin/yocto-project/build/tmp/work/qemux86_64-poky-linux/linux-yocto/6.6.96+git/linux-qemux86_64-standard-build/vmlinux
+```
+
+```.gdbinit
+target remote :1234
+set substitute-path /usr/src/kernel /home/kin/yocto-project/build/tmp/work-shared/qemux86-64/kernel-source/
+b start_kernel
+```
+
+## oe-depends-dot
+<!-- ~/src/yocto-tooling/videos/oe-depends-dot.mkv -->
+
+```sh
+bitbake -g core-image-minimal
+
+oe-depends-dot -k busybox -w ./task-depends.dot
+
+oe-depends-dot -k busybox -d ./task-depends.dot
+```
+
+## oe-pkgdata-util
+<!-- ~/src/yocto-tooling/videos/oe-pkgdata-util.mkv -->
+
+```sh
+oe-pkgdata-util find-path /etc/security/namespace.conf
+```
+
+```sh
+oe-pkgdata-util lookup-recipe libpam-runtime
+```
+
+```sh
+oe-pkgdata-util list-pkgs libpam\*
+```
+
+```sh
+oe-pkgdata-util list-pkg-files libpam
+```
+
+```sh
+oe-pkgdata-util package-info libpam
+```
+
+## oe-run-native
+<!-- ~/src/yocto-tooling/videos/oe-run-native.mkv -->
+
+```sh
+bitbake -c addto_recipe_sysroot ninja-native
+oe-run-native ninja-native ninja -h
+```
+
+## buildhistory-collect-srcrevs
+<!-- ~/src/yocto-tooling/videos/buildhistory-collect-srcrevs.mkv -->
+
+```sh
+buildhistory-collect-srcrevs -a
+buildhistory-collect-srcrevs >> conf/local.conf
+```
