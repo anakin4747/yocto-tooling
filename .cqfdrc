@@ -4,5 +4,6 @@ name='yocto-tooling'
 
 [build]
 command=''
+docker_run_args='-p 1234:1234'
 
 # vi: ft=ini
