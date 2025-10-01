@@ -1,5 +1,12 @@
 # yocto-tooling
 
+<div align="center">
+
+[![Youtube](https://img.youtube.com/vi/cIXqjJsbKIc/mqdefault.jpg)](https://www.youtube.com/watch?v=cIXqjJsbKIc)
+
+</div>
+
+
 ## Tools I will cover
 
 - bitbake-layers
