@@ -2,19 +2,14 @@
 
 # TODO
 
-- adapt to use bitbake-setup
-- Move to master YP
-- use qemuarm64
 - add recommended tools
   - taskexp_ncurses.py
-  - VSCode and Neovim
+  - VSCode
   - Toaster
 
 ## Tools I will cover
 
 - bitbake-layers
-- setup-layers
-- setup-build
 - bitbake-getvar
 - bitbake
 - recipetool
@@ -25,183 +20,232 @@
 - oe-run-native
 - buildhistory-collect-srcrevs
 
-## Assume project is Already setup with bitbake-setup
+# Setup
 
+The environment for this project will already be setup using `bitbake-setup`.
 
-Let's see what layers we have right now:
+First let's source our environment:
 
 ```sh
-bitbake-layers show-layers
+cd bitbake-builds/
+source distro_poky-master/build/init-build-env
 ```
 
-We can add a layer from the oe-layer index:
+After sourcing the build script we have two folders added to our `PATH`
+environment variable:
 
 ```sh
-bitbake-layers layerindex-show-depends meta-python
+echo $PATH | tr ':' '\n'
+```
+```output
+/home/ilab01/bitbake-builds/distro_poky-master/layers/openembedded-core/scripts
+/home/ilab01/bitbake-builds/distro_poky-master/layers/bitbake/bin
+/usr/local/bin
+/usr/bin
+/bin
+/usr/local/games
+/usr/games
 ```
 
+Inside these two new folders are the tools and scripts we will be using
+throughout this class.
+
+## Getting Help
+
+Most of the tools shown in this class accept a `-h` or `--help` flag to show
+the usage. This is a great first step to get more help for how to use the tools
+mentioned in this class:
+
 ```sh
-bitbake-layers layerindex-fetch --shallow --fetchdir ../src meta-python
-bitbake-layers show-layers
+bitbake-layers -h
 ```
 
+Note that subcommands can also accept a `-h` flag as well:
+
 ```sh
-bitbake-layers show-recipes -l meta-python
+bitbake-layers show-recipes -h
 ```
 
-Just to show some more bitbake-layers commands I will delete some layers:
+If the help output doesn't answer your questions I recommend grepping your
+layers for documentation on the tool in question:
 
 ```sh
-bitbake-layers remove-layer meta-python meta-oe
-bitbake-layers show-layers
-rm -rf ../src/meta-openembedded
+grep -rn --color bitbake-layers ../layers/
 ```
 
-Now lets add a custom layer but we need to track it with git so that
-setup-layers treats it as a layer:
+To get even more information on a specific command I also recommend reading its
+source code. They are typically straight-forward single-file python scripts
+that are quite readable. This makes them very approachable to read for a better
+understanding of how the tool works.
+
+For example to find the source code of `bitbake-layers`, you can use `which` to
+get the path to the `bitbake-layers` script and then open it with your
+favourite editor:
 
 ```sh
-bitbake-layers create-layer ../src/meta-vader
-git -C ../src/meta-vader init
-git -C ../src/meta-vader add .
-git -C ../src/meta-vader commit -m "initial commit"
-```
-
-Now we need to add our custom layer to our bblayers.conf, we can do this
-manually or with `bitbake-layers`.
-
-```sh
-bitbake-layers show-layers
-bitbake-layers add-layer ../src/meta-vader
-bitbake-layers show-layers
-```
-
-Let's set the machine and distro in local.conf:
-
-```sh
-cat << EOF > conf/local.conf
-INHERIT += "buildhistory"
-MACHINE = "qemux86-64"
-DISTRO = "poky-altcfg"
-DISTRO_FEATURES = "systemd pci ext4 ipv4"
-EXTRA_IMAGE_FEATURES += "empty-root-password"
-EOF
-```
-
-Now I want to save this setup so that it is reproducible.
-
-I can save my layers and their remote's with the following command:
-
-```sh
-# save layer remotes
-bitbake-layers create-layers-setup ../src/meta-vader
-# save bblayers.conf and local.conf as a template
-bitbake-layers save-build-conf ../src/meta-vader vader
-```
-
-```sh
-# save template and conf files in layer
-git -C ../src/meta-vader add .
-git -C ../src/meta-vader commit -m "save setup-layers and template"
-```
-
-## Using the bootstrap layer
-<!-- ~/src/yocto-tooling/videos/using-the-bootstrap-layer.mkv -->
-
-Now I want to reproduce this setup on another machine:
-
-```sh
-# 1. clone bootstrap Yocto layer
-git clone ~/yocto-project/src/meta-vader/ ~/yocto-project2/src/meta-vader
-cd ~/yocto-project2/
-```
-
-Copy over docker config files again:
-
-```sh
-cp -r ~/src/yocto-tooling/.cqfd* .
-cqfd init
-cqfd shell
-```
-
-Now that I have cloned my bootstrap layer to the location I want I can setup
-all the other layers:
-
-```sh
-# 2. run setup-layers to clone other layers
-./src/meta-vader/setup-layers
-```
-
-This clones all the layers to the same directory as `meta-vader`:
-
-Now `setup-build` or the classic `oe-init-build-env`
-
-```sh
-# 3. setup build env and conf files
-./src/setup-build setup -c vader-vader -b build
-```
-
-or
-
-```sh
-# 3. setup build env and conf files
-TEMPLATECONF=$PWD/src/meta-vader/conf/templates/vader source ./src/poky/oe-init-build-env
-```
-
-```sh
-# 4. build
-bitbake -k core-image-minimal
-```
-
-Personally not a big fan because it requires more steps which are prone to
-human error.
-
-Where as with kas the process would look like:
-
-```sh
-# 1. clone project
-git clone <url> yocto-project
-cd yocto-project
-# 2. build
-kas build
+vim $(which bitbake-layers)
 ```
 
 ## bitbake-layers
-<!-- ~/src/yocto-tooling/videos/bitbake-layers.mkv -->
 
-Now so far I have shown you every bitbake-layers command except:
+The first command worth learning to manage a Yocto project is `bitbake-layers`.
 
 ```sh
+bitbake-layers -h
+```
+
+The `-h` help output shows the subcommands which can be used with this script.
+
+We want to have some layers and recipes to play with so first we will download
+some layers from the `oe-layerindex`. Let's say we want `meta-python` to get some
+python packages not available in the `meta` layer.
+
+We can first use the `layerindex-show-depends` to see what dependencies
+meta-python requires:
+
+```sh
+bitbake-layers layerindex-show-depends -b master meta-python
+```
+
+Note that we need to specify the master branch with `-b master` since this
+class is using the master branch. Most likely this will not be needed for
+earlier versions of Yocto and you can let `bitbake-layers` determine the best
+branch for your configuration.
+
+The `show-layers` subcommand to see what layers are currently present in our
+project:
+
+```sh
+bitbake-layers show-layers
+```
+
+With this subcommand we can see what layers we have but this can also be used,
+for example, to validate that a layer we added was correctly added and can be
+seen by bitbake.
+
+Now let's add the `meta-python` layer with the `layerindex-fetch` subcommand
+(the --shallow option is to do a shallow git clone since we currently do not
+need the git meta data of all the repos):
+
+```sh
+bitbake-layers layerindex-fetch -b master --shallow meta-python
+```
+
+<!-- TODO: add creating custom layer -->
+
+The next command can be used to display the recipes bitbake can see:
+
+```sh
+bitbake-layers show-recipes
+```
+
+This subcommand can be used, for example, to validate that a recipe we added
+was correctly added and can be seen by bitbake.
+
+The output of this command lists the recipe name and on the next line shows
+what version is provided by what layer:
+
+```output
+...
+zstd:
+  meta                 1.5.7
+```
+
+The above output snippet shows that the `meta` layer provides version 1.5.7 of
+`zstd`.
+
+The `show-recipes` subcommand without any arguments can also show some recipes
+that were detected but skipped due to incompatibilities:
+
+```output
+...
+xf86-video-vmware:
+  meta                 13.4.0 (skipped: incompatible with host aarch64-poky-linux (not
+...
+```
+
+We can also specify a single recipe if we only want to query a single recipe:
+
+```sh
+bitbake-layers show-recipes xcb-util-errors
+```
+
+Or we can specify a wildcard if we want to group by a pattern:
+
+```sh
+bitbake-layers show-recipes "xcb-*"
+```
+
+The default output of this subcommand can be changed with a variety of flags.
+For example, `-f` will show only full filenames instead and `-r` will only show
+recipe names instead. These both do not display the layer and version. While
+`-b` can be used to not display `(skipped)` markers.
+
+Flags like `-l`, `-m`, and `-i` can be used to make more custom recipe queries.
+
+The filter the recipes per layer you can add the `-l` flag to specify the
+layer:
+
+```sh
+bitbake-layers show-recipes -l meta-poky
+```
+
+The `-m` flag shows recipes only who have multiple definitions:
+
+```sh
+bitbake-layers show-recipes -m
+```
+<!-- TODO: determine why some single recipes end up in the output -->
+
+The `-i` flag can be used to query only recipes that include a specific bbclass
+or combinations of bbclasses:
+
+```sh
+# shows recipes which inherit kernel.bbclass
 bitbake-layers show-recipes -i kernel
+
+# shows recipes which inherit systemd.bbclass and cmake.bbclass
+bitbake-layers show-recipes -i systemd,cmake
 ```
 
-```sh
-bitbake-layers flatten layer1 layer2 output-layer
-# flatten layer configuration into a separate output directory.
-```
-
-Can be used to merge layers.
-
-```sh
-bitbake-layers show-overlayed
-```
-
-Shows when multiple layers provide the same recipe.
+In the same way we have been able to validate our layers and recipes were correctly added
+with `show-layers` and `show-recipes`, we can do the same for bbappends with
+the `show-appends` subcommand:
 
 ```sh
 bitbake-layers show-appends
 bitbake-layers show-appends linux-yocto
 ```
 
+The same goes for validating the addition of a machine configuration with the
+`show-machines` subcommand which can also accept a `-l` flag to specify the
+layer:
+
+```sh
+bitbake-layers show-machines
+bitbake-layers show-machines -l meta-yocto-bsp
+```
+
+The `show-overlayed` subcommand can be used to show recipes defined in multiple
+layers:
+
+```sh
+bitbake-layers show-overlayed
+```
+<!-- TODO: Could be setup so that this can actually be shown? maybe? -->
+
+The `show-cross-depends` subcommand shows dependencies between recipes that
+cross layer boundaries:
+
 ```sh
 bitbake-layers show-cross-depends
 ```
-Show dependencies between recipes that cross layer boundaries. Great for
-determining what layers your layer depends on to correctly set
-`LAYERDEPENDS_meta-<layer>` in layer.conf.
+<!-- TODO: Could be setup so that this can actually be shown? maybe? -->
+
+This is great for determining what layers your layer depends on to correctly
+set `LAYERDEPENDS_meta-<layer>` in layer.conf.
 
 ## bitbake-getvar
-<!-- ~/src/yocto-tooling/videos/bitbake-getvar.mkv -->
 
 Now that my build is setup I can start building, but first let's just double
 check that my template has taken affect by checking that my MACHINE and DISTRO
