@@ -1,11 +1,14 @@
 # yocto-tooling
 
-<div align="center">
+# TODO
 
-[![Youtube](https://img.youtube.com/vi/cIXqjJsbKIc/mqdefault.jpg)](https://www.youtube.com/watch?v=cIXqjJsbKIc)
-
-</div>
-
+- adapt to use bitbake-setup
+- Move to master YP
+- use qemuarm64
+- add recommended tools
+  - taskexp_ncurses.py
+  - VSCode and Neovim
+  - Toaster
 
 ## Tools I will cover
 
@@ -22,59 +25,8 @@
 - oe-run-native
 - buildhistory-collect-srcrevs
 
-To begin I want to show how to setup Yocto using standard yocto tooling (ie not
-using kas or repo).
+## Assume project is Already setup with bitbake-setup
 
-Yocto project layout I chose when using official Yocto tools:
-```sh
-yocto-project (not source controlled)
-├── build     (not source controlled)
-└── src
-    ├── meta-vader        (separate git repo)  (our bootstrap layer)
-    ├── poky              (separate git repo)  (third party layer)
-    ├── meta-openembedded (separate git repo)  (third party layer)
-    └── ...               (separate git repos) (third party layers)
-```
-
-What I personally prefer for a Yocto project layout:
-```sh
-yocto-project (git repo)
-├── build     (not source controlled)
-└── src
-    ├── meta-vader (source controlled as part of yocto-project repo)
-    ├── poky              (separate git repo)  (third party layer)
-    ├── meta-openembedded (separate git repo)  (third party layer)
-    └── ...               (separate git repos) (third party layers)
-```
-
-I wasn't able to get my preferred layout with the official tools because it
-would treat the top level git repo as a layer so I couldn't figure out how to
-use `setup-layers` without it creating `yocto-project/yocto-project`.
-
-## Setting up a Yocto project from scratch with official Yocto tools
-<!-- ~/src/yocto-tooling/videos/setting-up-a-yocto-project.mkv -->
-
-```sh
-cd ~/yocto-project
-```
-
-First things first we need `poky`:
-
-```sh
-git clone git://git.yoctoproject.org/poky -b scarthgap --depth 1 src/poky
-```
-
-Gunna cheat a lil with `cqfd` since I am on Arch:
-
-```sh
-cp -r ~/src/yocto-tooling/.cqfd* .
-cqfd init
-cqfd shell
-```
-
-```sh
-source src/poky/oe-init-build-env
-```
 
 Let's see what layers we have right now:
 
