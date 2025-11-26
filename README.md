@@ -345,6 +345,8 @@ changed to "qemuarm64" at line 251 in `conf/local.conf`. As for DISTRO, it is
 still the default value of "nodistro" which was set by like 788 in
 `bitbake.conf`.
 
+We can also specify a recipe with `-r` to get recipe specific variables:
+
 ```sh
 # maybe you want to quickly see where you are getting your kernel sources from
 bitbake-getvar -r virtual/kernel SRC_URI
@@ -354,18 +356,43 @@ bitbake-getvar -r virtual/kernel -u --value SRC_URI
 bitbake-getvar -f doc --value SRC_URI
 ```
 
-Great for investigating if setting a variable was redundant.
+This is a great tool for debugging the assignment of specific variables.
 
 ## bitbake
-<!-- ~/src/yocto-tooling/videos/bitbake.mkv -->
 
-Most used bitbake commands:
+One of the most used commands when interacting with Yocto is the `bitbake`
+command.
+
+The follow command builds the recipe called `core-image-minimal`:
 
 ```sh
 bitbake core-image-minimal
+```
+
+Runnning `bitbake` without any flags will stop once it runs into an error.
+Often when running an unattended build this behaviour is underised. To have
+`bitbake` continue to build as much as it can even when there are errors you
+can use the `-k` or `--continue` flag:
+
+```sh
 bitbake -k core-image-minimal
+```
+
+If you just want to validate that all recipes are syntatically correct you can
+run bitbake with the `-p` flag to only parse the recipes:
+
+```sh
+bitbake -p core-image-minimal
+```
+
+Or for a more thorough validation of the setup you can run bitbake with the
+`-n` flag to perform a dry run of the build:
+
+```sh
 bitbake -n core-image-minimal
 ```
+
+
 
 ```sh
 bitbake -c listtasks busybox
@@ -390,8 +417,13 @@ bitbake --runall fetch core-image-minimal
 bitbake -g core-image-minimal
 ```
 
+### taskexp_ncurses
+
+```sh
+bitbake -g -u taskexp_ncurses zlib acl
+```
+
 ## recipetool
-<!-- ~/src/yocto-tooling/videos/recipetool.mkv -->
 
 ```sh
 recipetool edit example
@@ -514,3 +546,12 @@ oe-run-native ninja-native ninja -h
 buildhistory-collect-srcrevs -a
 buildhistory-collect-srcrevs >> conf/local.conf
 ```
+
+## Toaster
+
+```sh
+```
+
+## VSCode
+
+
