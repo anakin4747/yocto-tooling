@@ -392,17 +392,82 @@ Or for a more thorough validation of the setup you can run bitbake with the
 bitbake -n core-image-minimal
 ```
 
-
+Often times we will want to explicitly run a specific task within a recipe.
+This can be done with the `-c` flag. The best task to run to learn more about
+this functionality is the `listtasks` task that every recipe has by default:
 
 ```sh
 bitbake -c listtasks busybox
+```
+
+```output
+...
+do_build                              Default task for a recipe - depends on all other normal tasks required to 'build' a recipe
+do_checkuri                           Validates the SRC_URI value
+do_clean                              Removes all output files for a target
+do_cleanall                           Removes all output files, shared state cache, and downloaded source files for a target
+do_cleansstate                        Removes all output files and shared state cache for a target
+do_collect_spdx_deps
+do_compile                            Compiles the source in the compilation directory
+do_configure                          Configures the source by enabling and disabling any build-time and configuration options for the software being built
+...
+do_devshell                           Starts a shell with the environment set up for development/debugging
+do_diffconfig                         Compares the old and new config files after running do_menuconfig for the kernel
+do_fetch                              Fetches the source code
+do_install                            Copies files from the compilation directory to a holding area
+do_listtasks                          Lists all defined tasks for a target
+do_menuconfig                         Runs 'make menuconfig' in the compilation directory
+...
+```
+
+All of these tasks listed can be passed as an argument to `-c` with or without
+the `do_` prefix.
+
+
+To only run the compile task of `busybox`:
+
+```sh
 bitbake -c compile busybox
+```
+
+Sometimes bitbake may determine that a task did not need to run. To force a
+task to run use the `-f` flag:
+
+```sh
+bitbake -f -c compile busybox
+# or equivalently
+bitbake -fc compile busybox
+```
+
+Some tasks are useful for debugging. Such as the `devshell` task. This task
+will place you in a shell in the source code of the recipe with the same
+environment that is used to build the recipe. The `pydevshell` task will do the
+same but instead puts you in a python repl:
+
+```sh
 bitbake -c devshell busybox
 bitbake -c pydevshell busybox
+```
+
+Recipes can be cleaned to varying degrees with the `clean*` tasks:
+
+```sh
 bitbake -c clean busybox
 bitbake -c cleansstate busybox
 bitbake -c cleanall busybox
 ```
+
+Note that you should avoid `cleanall` if you do not wish to refetch the source
+code.
+
+Another extremely useful flag to bitbake is the `-e` flag. This is an
+incredible tool for debugging as it prints the entire environment of a recipe
+or build. This is essentially the same thing as `bitbake-getvar` but it applies
+to every variable and task in the recipe's environment. In the same manor as
+`bitbake-getvar` it also shows the history of how a task or variable was
+defined. It produces a very large file so its best to redirect it to a file or
+pipe it to `tee`. I recommend using a file extension that will tell your editor
+that it is best highlighted as a shell script such as `.sh` or `.env`:
 
 ```sh
 bitbake -e core-image-minimal | tee image.env
