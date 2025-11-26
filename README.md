@@ -473,14 +473,35 @@ that it is best highlighted as a shell script such as `.sh` or `.env`:
 bitbake -e core-image-minimal | tee image.env
 ```
 
+There is also a flag called `--runall` which can be used to run all tasks of a
+specific recipe. A common use case for this is if you want to download all
+sources ahead of time for either offline development or preparing your own
+mirror for all your project's dependencies.
+
+The example below fetches all remote sources listed in `SRC_URI` for all
+packages needed to build the `core-image-minimal` image:
+
 ```sh
-bitbake --runall fetch world
 bitbake --runall fetch core-image-minimal
 ```
+
+Or you could fetch everything with the `world` recipe. The `world` recipe is
+actually not a recipe but a special bitbake target that implies all recipes
+that are not explicitly excluded from `world` with the `EXCLUDE_FROM_WORLD`
+variable:
+
+```sh
+bitbake --runall fetch world
+```
+
+The `-g` flag is a option which makes bitbake generate a graphviz
+representation of the dependency graph of, in this example, `core-image-minimal`:
 
 ```sh
 bitbake -g core-image-minimal
 ```
+
+Which can be used to generate images
 
 ### taskexp_ncurses
 
@@ -540,7 +561,6 @@ recipetool appendsrcfile ../src/meta-vader virtual/kernel this_defconfig \
 ```
 
 ## runqemu
-<!-- ~/src/yocto-tooling/videos/runqemu.mkv -->
 
 ```sh
 runqemu slirp qemux86-64 nographic
@@ -563,7 +583,6 @@ b start_kernel
 ```
 
 ## oe-depends-dot
-<!-- ~/src/yocto-tooling/videos/oe-depends-dot.mkv -->
 
 ```sh
 bitbake -g core-image-minimal
@@ -574,7 +593,6 @@ oe-depends-dot -k busybox -d ./task-depends.dot
 ```
 
 ## oe-pkgdata-util
-<!-- ~/src/yocto-tooling/videos/oe-pkgdata-util.mkv -->
 
 ```sh
 oe-pkgdata-util find-path /etc/security/namespace.conf
@@ -597,7 +615,6 @@ oe-pkgdata-util package-info libpam
 ```
 
 ## oe-run-native
-<!-- ~/src/yocto-tooling/videos/oe-run-native.mkv -->
 
 ```sh
 bitbake -c addto_recipe_sysroot ninja-native
@@ -605,7 +622,10 @@ oe-run-native ninja-native ninja -h
 ```
 
 ## buildhistory-collect-srcrevs
-<!-- ~/src/yocto-tooling/videos/buildhistory-collect-srcrevs.mkv -->
+
+```bitbake
+INHERIT += "buildhistory"
+```
 
 ```sh
 buildhistory-collect-srcrevs -a
@@ -615,7 +635,23 @@ buildhistory-collect-srcrevs >> conf/local.conf
 ## Toaster
 
 ```sh
+# create a virtual environment to avoid installing toaster dependencies
+# globally
+python3 -m venv venv
+source venv/bin/activate
+
+# install toaster requirements
+pip3 install -r ../layers/bitbake/toaster-requirements.txt
+
+# start toaster
+# need to specify webport or else it will only be on localhost
+source toaster start webport=0.0.0.0:8000
+
+# get ip address of this server
+ip -br a
 ```
+
+Then access `http://<server-ip>:8000`.
 
 ## VSCode
 
