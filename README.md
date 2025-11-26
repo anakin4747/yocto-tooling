@@ -13,7 +13,6 @@
 - bitbake-getvar
 - bitbake
 - recipetool
-- devtool
 - runqemu
 - oe-depends-dot
 - oe-pkgdata-util
@@ -28,7 +27,7 @@ First let's source our environment:
 
 ```sh
 cd bitbake-builds/
-source distro_poky-master/build/init-build-env
+source distro_poky-master/build-tools/init-build-env
 ```
 
 After sourcing the build script we have two folders added to our `PATH`
@@ -53,8 +52,8 @@ throughout this class.
 ## Getting Help
 
 Most of the tools shown in this class accept a `-h` or `--help` flag to show
-the usage. This is a great first step to get more help for how to use the tools
-mentioned in this class:
+the usage. This is a great first step to get more help for how to use the
+tools:
 
 ```sh
 bitbake-layers -h
@@ -74,9 +73,9 @@ grep -rn --color bitbake-layers ../layers/
 ```
 
 To get even more information on a specific command I also recommend reading its
-source code. They are typically straight-forward single-file python scripts
-that are quite readable. This makes them very approachable to read for a better
-understanding of how the tool works.
+source code. They are typically straight-forward python scripts that are quite
+readable. This makes them very approachable to read for a better understanding
+of how the tool works.
 
 For example to find the source code of `bitbake-layers`, you can use `which` to
 get the path to the `bitbake-layers` script and then open it with your
@@ -96,6 +95,17 @@ bitbake-layers -h
 
 The `-h` help output shows the subcommands which can be used with this script.
 
+Firstly, we can use the `show-layers` subcommand to see what layers are
+currently present in our project:
+
+```sh
+bitbake-layers show-layers
+```
+
+With this subcommand we can see what layers we have but this can also be used,
+for example, to validate that a layer we added was correctly added and can be
+seen by bitbake.
+
 We want to have some layers and recipes to play with so first we will download
 some layers from the `oe-layerindex`. Let's say we want `meta-python` to get some
 python packages not available in the `meta` layer.
@@ -112,17 +122,6 @@ class is using the master branch. Most likely this will not be needed for
 earlier versions of Yocto and you can let `bitbake-layers` determine the best
 branch for your configuration.
 
-The `show-layers` subcommand to see what layers are currently present in our
-project:
-
-```sh
-bitbake-layers show-layers
-```
-
-With this subcommand we can see what layers we have but this can also be used,
-for example, to validate that a layer we added was correctly added and can be
-seen by bitbake.
-
 Now let's add the `meta-python` layer with the `layerindex-fetch` subcommand
 (the --shallow option is to do a shallow git clone since we currently do not
 need the git meta data of all the repos):
@@ -131,7 +130,54 @@ need the git meta data of all the repos):
 bitbake-layers layerindex-fetch -b master --shallow meta-python
 ```
 
-<!-- TODO: add creating custom layer -->
+Now we can see that the `meta-python` layer and its dependencies have now been
+added to the project for us:
+
+```sh
+bitbake-layers show-layers
+```
+
+This is great for a couple reasons. We didn't have to go find the right commit
+of `meta-python`. We didn't have to manually install it in our project. We
+didn't need to manually add it to our `bblayers.conf`. We didn't have to repeat
+that process for all of `meta-python`'s dependencies.
+
+Layers need to be added to `/path/to/build/conf/bblayers.conf` for them to be
+detected by bitbake. If a layer is downloaded but not listed in the
+`bblayers.conf` or in the output of `show-layers` you can add these layers with
+the `add-layer` subcommand:
+
+```sh
+bitbake-layers add-layer ../layers/meta-yocto/meta-yocto-bsp
+bitbake-layers show-layers
+```
+
+We can also create our own layer with the `create-layer` subcommand:
+
+```sh
+bitbake-layers create-layer -e tuna -a -p 10 ../layers/meta-vader
+bitbake-layers show-layers
+```
+
+This created a layer for me and filled out the boilerplate logic needed to
+define a layer:
+
+```sh
+find ../layers/meta-vader/
+../layers/meta-vader/
+../layers/meta-vader/recipes-tuna
+../layers/meta-vader/recipes-tuna/tuna
+../layers/meta-vader/recipes-tuna/tuna/tuna_0.1.bb
+../layers/meta-vader/conf
+../layers/meta-vader/conf/layer.conf
+../layers/meta-vader/COPYING.MIT
+../layers/meta-vader/README
+```
+
+Notice that I set the priority with the `-p 10` flag and added the layer to
+`bblayers.conf` with the `-a` flag to avoid the extra step of running
+`add-layer` for the newly created layer. I also specified the name of the
+example recipe to `tuna` as a suprise for later.
 
 The next command can be used to display the recipes bitbake can see:
 
@@ -187,7 +233,7 @@ The filter the recipes per layer you can add the `-l` flag to specify the
 layer:
 
 ```sh
-bitbake-layers show-recipes -l meta-poky
+bitbake-layers show-recipes -l meta-python
 ```
 
 The `-m` flag shows recipes only who have multiple definitions:
@@ -204,8 +250,8 @@ or combinations of bbclasses:
 # shows recipes which inherit kernel.bbclass
 bitbake-layers show-recipes -i kernel
 
-# shows recipes which inherit systemd.bbclass and cmake.bbclass
-bitbake-layers show-recipes -i systemd,cmake
+# shows recipes which inherit systemd.bbclass and meson.bbclass
+bitbake-layers show-recipes -i systemd,meson
 ```
 
 In the same way we have been able to validate our layers and recipes were correctly added
@@ -232,7 +278,6 @@ layers:
 ```sh
 bitbake-layers show-overlayed
 ```
-<!-- TODO: Could be setup so that this can actually be shown? maybe? -->
 
 The `show-cross-depends` subcommand shows dependencies between recipes that
 cross layer boundaries:
@@ -240,28 +285,73 @@ cross layer boundaries:
 ```sh
 bitbake-layers show-cross-depends
 ```
-<!-- TODO: Could be setup so that this can actually be shown? maybe? -->
 
 This is great for determining what layers your layer depends on to correctly
 set `LAYERDEPENDS_meta-<layer>` in layer.conf.
 
+Turns out I decided I do not want `meta-python` and `meta-yocto-bsp` so I would
+like to remove them and their dependencies. This can be done with the
+`remove-layer` subcommand. Note that I will also remove `meta-oe` as it was
+only included due to `meta-python`'s dependency on it:
+
+```sh
+bitbake-layers remove-layer meta-python meta-oe meta-yocto-bsp
+bitbake-layers show-layers
+```
+
 ## bitbake-getvar
 
-Now that my build is setup I can start building, but first let's just double
-check that my template has taken affect by checking that my MACHINE and DISTRO
-are properly set.
+There are tools for inspecting deeper inside the build environments of a
+recipe. One excellent tool to dig deeper is `bitbake-getvar`. We can use it to
+get the value of bitbake variables in the build configuration or for specific
+recipes.
+
+First we will use it to confirm our `DISTRO` and `MACHINE` are correctly set:
 
 ```sh
 bitbake-getvar MACHINE
+NOTE: Starting bitbake server...
+#
+# $MACHINE [3 operations]
+#   set /home/ilab01/bitbake-builds/distro_poky-master/build-tools/conf/local.conf:29
+#     [_defaultval] "qemux86-64"
+#   set /home/ilab01/bitbake-builds/distro_poky-master/build-tools/conf/local.conf:251
+#     "qemuarm64"
+#   set /home/ilab01/bitbake-builds/distro_poky-master/layers/openembedded-core/meta/conf/documentation.conf:274
+#     [doc] "Specifies the target device for which the image is built. You define MACHINE in the conf/local.conf file in the Build Directory."
+# pre-expansion value:
+#   "qemuarm64"
+MACHINE="qemuarm64"
+```
+
+```sh
 bitbake-getvar DISTRO
+NOTE: Starting bitbake server...
+#
+# $DISTRO [2 operations]
+#   set /home/ilab01/bitbake-builds/distro_poky-master/layers/openembedded-core/meta/conf/bitbake.conf:788
+#     [_defaultval] "nodistro"
+#   set /home/ilab01/bitbake-builds/distro_poky-master/layers/openembedded-core/meta/conf/documentation.conf:140
+#     [doc] "The short name of the distribution. If the variable is blank, meta/conf/distro/defaultsetup.conf will be used."
+# pre-expansion value:
+#   "nodistro"
+DISTRO="nodistro"
+```
+
+The output of these two commands show us the value of the specified variable as
+well as the history of how this variable has been set. For example, the default
+value of MACHINE was "qemux86-64" at line 29 in `conf/local.conf` but got
+changed to "qemuarm64" at line 251 in `conf/local.conf`. As for DISTRO, it is
+still the default value of "nodistro" which was set by like 788 in
+`bitbake.conf`.
+
+```sh
 # maybe you want to quickly see where you are getting your kernel sources from
 bitbake-getvar -r virtual/kernel SRC_URI
 # but lets see that unexpanded value
 bitbake-getvar -r virtual/kernel -u --value SRC_URI
 # see varflags on variables
 bitbake-getvar -f doc --value SRC_URI
-# most useful of them all
-bitbake-getvar -h
 ```
 
 Great for investigating if setting a variable was redundant.
@@ -350,57 +440,6 @@ zcat /proc/config.gz > this_defconfig
 recipetool appendsrcfile ../src/meta-vader virtual/kernel this_defconfig \
     arch/x86/configs/this_defconfig
 # although your kernel provider may have their own way to implement this
-```
-
-## devtool
-<!-- ~/src/yocto-tooling/videos/devtool.mkv -->
-
-```sh
-cat /tmp/example-source-code/complex.sh
-# creates this recipe in the workspace for you to edit
-devtool add complex-script /tmp/example-source-code/complex.sh
-devtool rename complex-script simple-script
-devtool finish simple-script meta-vader
-```
-
-```sh
-# when I want to patch the kernel
-devtool modify virtual/kernel
-devtool menuconfig linux-yocto
-
-CONFIG_GDB_SCRIPTS=y
-CONFIG_WATCHDOG=n
-
-# highlight the difference between devshell and devtool
-bitbake -c devshell virtual/kernel
-make scripts_gdb
-devtool finish linux-yocto ../src/meta-vader/
-```
-
-```sh
-devtool status
-```
-
-```sh
-devtool reset -a
-```
-
-```sh
-devtool finish --force-patch-refresh virtual/kernel
-```
-
-```sh
-devtool latest-version virtual/kernel
-devtool check-upgrade-status virtual/kernel
-
-devtool check-upgrade-status busybox
-devtool upgrade busybox
-```
-
-```sh
-devtool search ostree
-# limited without building ahead of time
-# searches locally not online lame
 ```
 
 ## runqemu
