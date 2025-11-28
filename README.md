@@ -28,6 +28,7 @@ First let's source our environment:
 ```sh
 cd bitbake-builds/
 source distro_poky-master/build-tools/init-build-env
+bitbake core-image-minimal
 ```
 
 After sourcing the build script we have two folders added to our `PATH`
@@ -594,63 +595,181 @@ convention my `virtual/kernel` uses.
 The next useful script we will cover is `runqemu`. It uses `qemu` to emulate
 your image.
 
-```sh
-runqemu slirp qemux86-64 nographic
-```
+Here I am specifying that I want to emulate the `qemuarm64` machine. I add the
+`nographic` option so that it runs in my current terminal, the `slirp` argument
+to have rootless networking support, and the `snapshot` argument because it was
+required for images compressed with zst:
 
 ```sh
-runqemu slirp qemux86-64 nographic \
-    qemuparams="-s -S" \
-    bootparams="nokaslr"
+runqemu snapshot slirp qemuarm64 nographic
 ```
 
-```vim
-Termdebug /home/kin/yocto-project/build/tmp/work/qemux86_64-poky-linux/linux-yocto/6.6.96+git/linux-qemux86_64-standard-build/vmlinux
+To exit the image, hit `CTRL-a` then `x`.
+
+## oe-pkgdata-util
+
+In Yocto the output of a recipe are packages. The same type of packages one
+would `apt install` or `dnf install`. Often we will want to interact with these
+packages the same way you would with your package manager. That is where
+`oe-pkgdata-util` comes it. After building your image, and therefore the
+packages that make up the image, you can inspect the packages with
+`oe-pkgdata-util`.
+
+The most common use case of this tool is to help figure out what package
+installs a specific file onto the rootfs. The `find-path` subcommand helps us
+look this package up. We pass it a filepath on the target and it tells us which
+package installs that file:
+
+```sh
+oe-pkgdata-util find-path /usr/bin/setterm
+```
+```
+util-linux-setterm: /usr/bin/setterm
 ```
 
-```.gdbinit
-target remote :1234
-set substitute-path /usr/src/kernel /home/kin/yocto-project/build/tmp/work-shared/qemux86-64/kernel-source/
-b start_kernel
+Note that this tells us the name of the package not the name of the recipe.
+Often recipes names can line up with the package name but that is not always
+the case. So to find the recipe associated with that package name we can use
+the `lookup-recipe` subcommand and provide it a package name:
+
+```sh
+oe-pkgdata-util lookup-recipe util-linux-setterm
+```
+```
+util-linux
+```
+
+We can also list what packages exist based on a pattern with the `list-pkgs`
+subcommand.
+
+```sh
+oe-pkgdata-util list-pkgs util-linux-\*
+```
+
+Note that `oe-pkgdata-util` is used for BUILT packages. A package could exist
+in your codebase but if it is not built `oe-pkgdata-util` cannot tell you about
+it.
+
+Another extremely useful command which helps when writing a recipe is
+`list-pkg-files`. This is a great way to validate that only the exact files you
+want to include in a package are actually being included. It lists the files
+that a package installs:
+
+```sh
+oe-pkgdata-util list-pkg-files util-linux-doc
+```
+
+The above command is analogous to the following package manager commands:
+
+```sh
+# For apt (Debian, Ubuntu)
+dpkg -L <package-name>
+
+# For dnf (Fedora, RHEL, CentOS)
+dnf repoquery -l <package-name>
+
+# For Arch
+pacman -Ql <package-name>
+```
+
+You can also get more info regarding the package with the `package-info`
+subcommand:
+
+```sh
+oe-pkgdata-util package-info util-linux-doc
 ```
 
 ## oe-depends-dot
 
+Now that we know how to know which packages are install what files we would
+maybe want to remove that package. But then you notice that you are never
+explicitly including that package yourself. How do you find out whats including
+that package in the image?
+
+`oe-depends-dot` is how!
+
+`oe-depends-dot` has two usecases:
+- show reverse dependencies of a package
+- show dependencies of a package
+
+First we need to create the dependancy graph for our image:
+
 ```sh
 bitbake -g core-image-minimal
+```
 
+Now we can ask why (`-w`) a specific package (`busybox`) gets included in the
+image (reverse dependencies):
+
+```sh
 oe-depends-dot -k busybox -w ./task-depends.dot
+```
+```
+Because: core-image-minimal packagegroup-core-boot
+core-image-minimal -> packagegroup-core-boot -> busybox
+```
 
+And we can ask what else depends (`-d`) a specific package (`busybox`) in the
+image:
+
+```sh
 oe-depends-dot -k busybox -d ./task-depends.dot
 ```
-
-## oe-pkgdata-util
-
-```sh
-oe-pkgdata-util find-path /etc/security/namespace.conf
 ```
-
-```sh
-oe-pkgdata-util lookup-recipe libpam-runtime
-```
-
-```sh
-oe-pkgdata-util list-pkgs libpam\*
-```
-
-```sh
-oe-pkgdata-util list-pkg-files libpam
-```
-
-```sh
-oe-pkgdata-util package-info libpam
+Depends: gcc-runtime gcc-cross-aarch64 pseudo-native opkg-utils-native kern-tools-native patch-native update-rc libx
+crypt rpm-native dwarfsrcfiles-native glibc quilt-native zstd-native opkg-utils binutils-cross-aarch64 initscripts
 ```
 
 ## oe-run-native
 
+Another great tool is `oe-run-native`. Often, developer need host tools for
+example `uuu` for flashing or `tio` for reading serial consoles. Most often
+developers will install these on their build machines manually but Yocto
+provides a way to install via bitbake.
+
+For example say we want to use ninja but not install it on our machine
+manually. We can use `oe-run-native` to run that native application:
+
+```sh
+oe-run-native ninja-native ninja -h
+```
+```
+Getting sysroot...
+Error: /home/ilab01/bitbake-builds/distro_poky-master/build-tools/tmp/work/x86_64-linux/ninja-native/1.13.1/recipe-s
+ysroot-native doesn't exist.
+Have you run 'bitbake ninja-native -caddto_recipe_sysroot'?
+```
+
+Oh but there was an error? No worries, it tells you exactly what it needs to
+work!
+
 ```sh
 bitbake -c addto_recipe_sysroot ninja-native
 oe-run-native ninja-native ninja -h
+```
+```
+Getting sysroot...
+usage: ninja [options] [targets...]
+
+if targets are unspecified, builds the 'default' target (see manual).
+
+options:
+  --version      print ninja version ("1.13.1")
+  -v, --verbose  show all command lines while building
+  --quiet        don't show progress status, just command output
+
+  -C DIR   change to DIR before doing anything else
+  -f FILE  specify input build file [default=build.ninja]
+
+  -j N     run N jobs in parallel (0 means infinity) [default=6 on this system]
+  -k N     keep going until N jobs fail (0 means infinity) [default=1]
+  -l N     do not start new jobs if the load average is greater than N
+  -n       dry run (don't run commands but act like they succeeded)
+
+  -d MODE  enable debugging (use '-d list' to list modes)
+  -t TOOL  run a subtool (use '-t list' to list subtools)
+    terminates toplevel options; further flags are passed to the tool
+  -w FLAG  adjust warnings (use '-w list' to list warnings)
 ```
 
 ## buildhistory-collect-srcrevs
