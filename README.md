@@ -34,16 +34,11 @@ After sourcing the build script we have two folders added to our `PATH`
 environment variable:
 
 ```sh
-echo $PATH | tr ':' '\n'
+echo $PATH | tr ':' '\n' | grep bitbake
 ```
 ```output
 /home/ilab01/bitbake-builds/distro_poky-master/layers/openembedded-core/scripts
 /home/ilab01/bitbake-builds/distro_poky-master/layers/bitbake/bin
-/usr/local/bin
-/usr/bin
-/bin
-/usr/local/games
-/usr/games
 ```
 
 Inside these two new folders are the tools and scripts we will be using
@@ -501,66 +496,103 @@ representation of the dependency graph of, in this example, `core-image-minimal`
 bitbake -g core-image-minimal
 ```
 
-Which can be used to generate images
+This will create a 'task-depends.dot' file which can then be used to generate
+images using the `dot` CLI tool but I recommend using other tools, such as
+`taskexp_ncurses` or `oe-depends-dot`, to view this information instead.
 
 ### taskexp_ncurses
+
+<!-- TODO: Is there a way to force the UI to use the full terminal? -->
+
+Using the `-u` flag, one can specify which UI bitbake launches. The
+`taskexp_ncurses` UI is a TUI that can be used to view inter- and intra-recipe
+tasks dependencies:
 
 ```sh
 bitbake -g -u taskexp_ncurses zlib acl
 ```
+```
+┌──────────────────────────[Task Dependency Explorer]──────────────────────────┐
+│   Help='?' Filter='/' NextBox=<Tab> Select=<Enter> Print='p','P' Quit='q'    │
+├───────────────[Package]──────────────┐┌────────────[Dependencies]────────────┤
+│ zlib-native.do_unpack                ││                                      │
+│ zlib-native.do_patch                 ││                                      │
+│ zlib-native.do_collect_spdx_deps     ││                                      │
+│ zlib-native.do_deploy_source_date_epo││                                      │
+│ zlib-native.do_configure             ││                                      │
+│ zlib-native.do_compile               ││                                      │
+│ zlib-native.do_install               ││                                      │
+│ zlib-native.do_populate_sysroot      ││                                      │
+│ zlib-native.do_create_spdx           ││                                      │
+│>zlib.do_recipe_qa                    │└──────────────────────────────────────┘
+│ zlib.do_fetch                        │┌───────────[Dependent Tasks]──────────┐
+│ zlib.do_prepare_recipe_sysroot       ││ zlib.do_fetch                        │
+│ zlib.do_unpack                       ││ zlib.do_package_qa                   │
+│ zlib.do_patch                        ││ zlib.do_build                        │
+│ zlib.do_collect_spdx_deps            ││                                      │
+│ zlib.do_populate_lic                 ││                                      │
+│ zlib.do_deploy_source_date_epoch     ││                                      │
+│ zlib.do_configure                    ││                                      │
+│ zlib.do_compile                      ││                                      │
+└──────────────────────────────────────┘└──────────────────────────────────────┘
+[------------------------------[zlib.do_recipe_qa]-----------------------------]
+```
 
 ## recipetool
 
-```sh
-recipetool edit example
-```
+Another very useful tool is `recipetool` which can be used to interact with
+recipes more granularly.
+
+Using the `edit` subcommand, we will be dropped into our preferred editor to
+work on a specific recipe. This respects variables such as `$EDITOR` to
+determine your preferred editor:
 
 ```sh
-# kind of annoying that the path must be specified even though it doesn't need
-# to be for the edit subcommand
-recipetool setvar \
-    ../src/meta-vader/recipes-example/example/example_0.1.bb \
-    SUMMARY "A super cool example recipe"
-
-# whats cool about this is you can create patches to apply to the layer to
-# setvar, unfortunately this situation isn't common enough for a command like
-# this to become second hand knowledge. Pretty small use-case.
-recipetool setvar \
-    --patch \
-    ../src/meta-vader/recipes-example/example/example_0.1.bb \
-    SUMMARY "A super cool example recipe"
+# export EDITOR=nano
+# export EDITOR=code
+export EDITOR=vim
+recipetool edit tuna
 ```
+
+Another very useful subcommand is the `create` command. With this you can point
+`recipetool` to a codebase and have it generate the boilerplate recipe code for
+you. This example creates a recipe for `lua-openssl`:
 
 ```sh
-mkdir /tmp/example-source-code
-cat << EOF > /tmp/example-source-code/complex.sh
-#!/bin/sh
-echo "super complex shell script"
-EOF
-recipetool create /tmp/example-source-code/complex.sh \
-    -o ../src/meta-vader/recipes-example/complex-script.bb
+mkdir ../layers/meta-vader/recipes-example
+recipetool create https://github.com/zhaozg/lua-openssl \
+    -o ../layers/meta-vader/recipes-example/lua-openssl.bb
+cat ../layers/meta-vader/recipes-example/lua-openssl.bb
+
 ```
+<!-- rm -rf ../layers/meta-vader/recipes-example -->
+
+We can see that `recipetool` has automated all of the tedious work of creating a
+recipe. It has automatically detected the license of the codebase and of one of
+its dependencies and it even generated the md5sums of the licenses.
+
+It was able to detect that the project depends on `openssl` and uses `cmake` as
+its build system.
+
+This one command could save hours of your time.
+
+Another very useful subcommand of `recipetool` is `newappend`. This will
+generate a new bbappend for the specified recipe in the layer you specify. You
+can make the bbappend version agnostic with the `-w` wildcard option:
 
 ```sh
-recipetool newappend -w ../src/meta-vader virtual/kernel
+recipetool newappend -w ../layers/meta-vader virtual/kernel
 ```
 
-```sh
-# requires build first
-cat << EOF > hosts
-127.0.0.1        localhost
-EOF
-recipetool appendfile ../src/meta-vader /etc/hosts hosts
-```
-
-```sh
-zcat /proc/config.gz > this_defconfig
-recipetool appendsrcfile ../src/meta-vader virtual/kernel this_defconfig \
-    arch/x86/configs/this_defconfig
-# although your kernel provider may have their own way to implement this
-```
+This is very useful since it determines for you the best path to place it in
+your specified layer. This puts it in
+`../layers/meta-vader/recipes-kernel/linux` without me having to see what path
+convention my `virtual/kernel` uses.
 
 ## runqemu
+
+The next useful script we will cover is `runqemu`. It uses `qemu` to emulate
+your image.
 
 ```sh
 runqemu slirp qemux86-64 nographic
@@ -623,9 +655,7 @@ oe-run-native ninja-native ninja -h
 
 ## buildhistory-collect-srcrevs
 
-```bitbake
-INHERIT += "buildhistory"
-```
+Note that this requires `INHERIT += "buildhistory"` in your configuration.
 
 ```sh
 buildhistory-collect-srcrevs -a
@@ -648,11 +678,55 @@ pip3 install -r ../layers/bitbake/toaster-requirements.txt
 source toaster start webport=0.0.0.0:8000
 
 # get ip address of this server
-ip -br a
+ip -br addr
 ```
 
 Then access `http://<server-ip>:8000`.
 
-## VSCode
+## Vim Tidbit
 
+Vim can come in handy for calculating md5sums for filling in the
+LIC_FILES_CHKSUM variable if the license is embedded in a file.
 
+For example, if the license is lines 3 to 14 of `example/file.c`, one can
+highlight lines 3 to 14 with VISUAL_LINE mode and then type `!md5sum`. At this
+point you should see `:'<,'>!md5sum` in Vim's cmdline. Hit enter, this will
+pass the highlighted to stdin of `md5sum` and replace the highlighted text with
+stdout.
+
+Before:
+
+```c
+// example/file.c
+// line 2
+/*
+** Licensed under the Apache License, Version 2.0 (the "License");
+** you may not use this file except in compliance with the License.
+** You may obtain a copy of the License at
+**
+**     http://www.apache.org/licenses/LICENSE-2.0
+**
+** Unless required by applicable law or agreed to in writing, software
+** distributed under the License is distributed on an "AS IS" BASIS,
+** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+** See the License for the specific language governing permissions and
+** limitations under the License. */
+// line 15
+```
+
+After:
+
+```c
+// example/file.c
+// line 2
+4ed9c8f4103a1a3986da3a418fb35907  -
+// line 15
+```
+
+Now you can copy the md5sum and place it in the `LIC_FILES_CHKSUM` variable and
+undo the change made in `example/file.c`:
+
+```bitbake
+LICENSE = "Apache-2.0"
+LIC_FILES_CHKSUM = "file://example/file.c;beginline=3;endline=14;md5=4ed9c8f4103a1a3986da3a418fb35907"
+```
