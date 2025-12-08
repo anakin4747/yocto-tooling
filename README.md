@@ -390,7 +390,7 @@ devtool reset -a
 ```
 
 ```sh
-devtool finish --force-patch-refresh virtual/kernel
+devtool finish --force-patch-refresh linux-yocto ../src/meta-vader/
 ```
 
 ```sh
