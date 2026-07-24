@@ -1,11 +1,21 @@
-# yocto-tooling
+# Yocto and Bitbake Tooling
+
+Notes for my two talks on Yocto and Bitbake tooling at the Yocto Project Virtual Summit 2025 and the same talk I gave at Savoir-faire Linux.
+
+## Yocto Project Virtual Summit Talks
 
 <div align="center">
-
-[![Youtube](https://img.youtube.com/vi/cIXqjJsbKIc/mqdefault.jpg)](https://www.youtube.com/watch?v=cIXqjJsbKIc)
-
+[![Yocto and Bitbake Tooling talk](https://img.youtube.com/vi/FDYoGb7NJTc/mqdefault.jpg)](https://www.youtube.com/watch?v=FDYoGb7NJTc)
+</div>
+<div align="center">
+[![Yocto and Bitbake Tooling hands on workshop](https://img.youtube.com/vi/NPhMq1HIaXA/mqdefault.jpg)](https://www.youtube.com/watch?v=NPhMq1HIaXA)
 </div>
 
+## Savoir-faire Linux Talk
+
+<div align="center">
+[![SFL](https://img.youtube.com/vi/cIXqjJsbKIc/mqdefault.jpg)](https://www.youtube.com/watch?v=cIXqjJsbKIc)
+</div>
 
 ## Tools I will cover
 
